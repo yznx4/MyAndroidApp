@@ -51,6 +51,8 @@ public class MainActivity extends AppCompatActivity {
     private boolean shouldStartAfterPermission;
 
     private String transcript = "";
+    private String finalizedTranscript = "";
+    private String partialTranscript = "";
     private String summary = "";
     @StringRes
     private int statusResId = R.string.status_idle;
@@ -79,6 +81,8 @@ public class MainActivity extends AppCompatActivity {
 
         if (savedInstanceState != null) {
             transcript = savedInstanceState.getString(KEY_TRANSCRIPT, "");
+            finalizedTranscript = transcript;
+            partialTranscript = "";
             summary = savedInstanceState.getString(KEY_SUMMARY, "");
             statusResId = savedInstanceState.getInt(KEY_STATUS_RES, R.string.status_idle);
             String savedState = savedInstanceState.getString(KEY_UI_STATE, UiState.IDLE.name());
@@ -156,6 +160,8 @@ public class MainActivity extends AppCompatActivity {
         uiState = UiState.RECORDING;
         setStatus(R.string.listening);
         transcript = "";
+        finalizedTranscript = "";
+        partialTranscript = "";
         summary = "";
         renderText();
         applyUiState();
@@ -258,7 +264,9 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onResults(Bundle results) {
-                transcript = getBestResult(results, transcript);
+                appendFinalTranscript(getBestResult(results, ""));
+                partialTranscript = "";
+                updateTranscriptForDisplay();
                 renderText();
 
                 if (uiState == UiState.RECORDING) {
@@ -275,7 +283,8 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onPartialResults(Bundle partialResults) {
-                transcript = getBestResult(partialResults, transcript);
+                partialTranscript = getBestResult(partialResults, "");
+                updateTranscriptForDisplay();
                 renderText();
                 applyUiState();
             }
@@ -306,6 +315,37 @@ public class MainActivity extends AppCompatActivity {
                 speechRecognizer.startListening(recognizerIntent);
             }
         }, RESTART_LISTENING_DELAY_MS);
+    }
+
+    private void appendFinalTranscript(String latestResult) {
+        String trimmedResult = latestResult == null ? "" : latestResult.trim();
+        if (trimmedResult.isEmpty()) {
+            return;
+        }
+
+        if (finalizedTranscript.trim().isEmpty()) {
+            finalizedTranscript = trimmedResult;
+            return;
+        }
+
+        finalizedTranscript = finalizedTranscript + " " + trimmedResult;
+    }
+
+    private void updateTranscriptForDisplay() {
+        String finalized = finalizedTranscript.trim();
+        String partial = partialTranscript.trim();
+
+        if (finalized.isEmpty()) {
+            transcript = partial;
+            return;
+        }
+
+        if (partial.isEmpty()) {
+            transcript = finalized;
+            return;
+        }
+
+        transcript = finalized + " " + partial;
     }
 
     @StringRes
