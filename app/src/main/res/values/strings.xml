@@ -1,3 +1,19 @@
 <resources>
     <string name="app_name">TranscriptionAi</string>
+    <string name="start_recording">Start recording</string>
+    <string name="stop_recording">Stop recording</string>
+    <string name="summarize">Summarize</string>
+    <string name="permission_denied">Microphone permission denied.</string>
+    <string name="listening">Listening…</string>
+    <string name="summary_failed">Summary failed. Please try again.</string>
+    <string name="status_idle">Ready</string>
+    <string name="status_recording_stopped">Recording stopped.</string>
+    <string name="status_summarizing">Summarizing…</string>
+    <string name="status_summary_ready">Summary ready.</string>
+    <string name="transcript_label">Transcript</string>
+    <string name="summary_label">Summary</string>
+    <string name="transcript_empty">No transcript yet.</string>
+    <string name="summary_empty">No summary yet.</string>
+    <string name="mock_transcript">This is a sample transcript captured from your recording.</string>
+    <string name="summary_result_format">Summary: %1$s</string>
 </resources>
