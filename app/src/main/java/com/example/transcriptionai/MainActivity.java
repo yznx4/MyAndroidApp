@@ -2,9 +2,13 @@ package com.example.transcriptionai;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ProgressBar;
@@ -19,12 +23,16 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import java.util.ArrayList;
+import java.util.Locale;
+
 public class MainActivity extends AppCompatActivity {
 
     private static final String KEY_TRANSCRIPT = "key_transcript";
     private static final String KEY_SUMMARY = "key_summary";
     private static final String KEY_STATUS_RES = "key_status_res";
     private static final String KEY_UI_STATE = "key_ui_state";
+    private static final int REQUEST_RECORD_AUDIO_PERMISSION = 1001;
 
     private Button buttonStart;
     private Button buttonStop;
@@ -36,6 +44,10 @@ public class MainActivity extends AppCompatActivity {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Runnable summarizeRunnable;
+    private SpeechRecognizer speechRecognizer;
+    private Intent recognizerIntent;
+
+    private boolean shouldStartAfterPermission;
 
     private String transcript = "";
     private String summary = "";
@@ -62,6 +74,7 @@ public class MainActivity extends AppCompatActivity {
 
         bindViews();
         bindActions();
+        setupSpeechRecognizer();
 
         if (savedInstanceState != null) {
             transcript = savedInstanceState.getString(KEY_TRANSCRIPT, "");
@@ -95,6 +108,10 @@ public class MainActivity extends AppCompatActivity {
         if (summarizeRunnable != null) {
             handler.removeCallbacks(summarizeRunnable);
         }
+        if (speechRecognizer != null) {
+            speechRecognizer.destroy();
+            speechRecognizer = null;
+        }
     }
 
     private void bindViews() {
@@ -122,32 +139,159 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startRecording() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            setStatus(R.string.speech_not_available);
+            applyUiState();
+            return;
+        }
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
-            setStatus(R.string.permission_denied);
-            Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_SHORT).show();
-            applyUiState();
+            shouldStartAfterPermission = true;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_RECORD_AUDIO_PERMISSION);
             return;
         }
 
         uiState = UiState.RECORDING;
         setStatus(R.string.listening);
+        transcript = "";
         summary = "";
         renderText();
         applyUiState();
+        if (speechRecognizer != null) {
+            speechRecognizer.startListening(recognizerIntent);
+        }
     }
 
     private void stopRecording() {
         if (uiState != UiState.RECORDING) {
             return;
         }
-        uiState = UiState.IDLE;
-        if (transcript.trim().isEmpty()) {
-            transcript = getString(R.string.mock_transcript);
+        if (speechRecognizer != null) {
+            speechRecognizer.stopListening();
         }
+        uiState = UiState.IDLE;
         setStatus(R.string.status_recording_stopped);
         renderText();
         applyUiState();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != REQUEST_RECORD_AUDIO_PERMISSION) {
+            return;
+        }
+
+        boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+        if (granted) {
+            if (shouldStartAfterPermission) {
+                shouldStartAfterPermission = false;
+                startRecording();
+            }
+            return;
+        }
+
+        shouldStartAfterPermission = false;
+        setStatus(R.string.permission_denied);
+        Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_SHORT).show();
+        applyUiState();
+    }
+
+    private void setupSpeechRecognizer() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            return;
+        }
+
+        recognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        recognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        speechRecognizer.setRecognitionListener(new RecognitionListener() {
+            @Override
+            public void onReadyForSpeech(Bundle params) {
+                setStatus(R.string.listening);
+                applyUiState();
+            }
+
+            @Override
+            public void onBeginningOfSpeech() {
+                setStatus(R.string.listening);
+                applyUiState();
+            }
+
+            @Override
+            public void onRmsChanged(float rmsdB) {
+            }
+
+            @Override
+            public void onBufferReceived(byte[] buffer) {
+            }
+
+            @Override
+            public void onEndOfSpeech() {
+                if (uiState == UiState.RECORDING) {
+                    setStatus(R.string.status_processing_transcript);
+                    applyUiState();
+                }
+            }
+
+            @Override
+            public void onError(int error) {
+                uiState = UiState.IDLE;
+                setStatus(mapRecognizerErrorToStatus(error));
+                applyUiState();
+            }
+
+            @Override
+            public void onResults(Bundle results) {
+                transcript = getBestResult(results, transcript);
+                uiState = UiState.IDLE;
+                setStatus(R.string.status_recording_stopped);
+                renderText();
+                applyUiState();
+            }
+
+            @Override
+            public void onPartialResults(Bundle partialResults) {
+                transcript = getBestResult(partialResults, transcript);
+                renderText();
+                applyUiState();
+            }
+
+            @Override
+            public void onEvent(int eventType, Bundle params) {
+            }
+        });
+    }
+
+    private String getBestResult(Bundle results, String fallbackValue) {
+        if (results == null) {
+            return fallbackValue;
+        }
+        ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+        if (matches == null || matches.isEmpty()) {
+            return fallbackValue;
+        }
+        return matches.get(0);
+    }
+
+    @StringRes
+    private int mapRecognizerErrorToStatus(int error) {
+        if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+            return R.string.transcription_no_match;
+        }
+        if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+            return R.string.permission_denied;
+        }
+        if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT
+                || error == SpeechRecognizer.ERROR_SERVER) {
+            return R.string.transcription_network_error;
+        }
+        return R.string.transcription_generic_error;
     }
 
     private void beginSummarization() {

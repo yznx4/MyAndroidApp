@@ -5,6 +5,8 @@
     <string name="summarize">Summarize</string>
     <string name="permission_denied">Microphone permission denied.</string>
     <string name="listening">Listening…</string>
+    <string name="speech_not_available">Speech recognition is not available on this device.</string>
+    <string name="status_processing_transcript">Processing speech…</string>
     <string name="summary_failed">Summary failed. Please try again.</string>
     <string name="status_idle">Ready</string>
     <string name="status_recording_stopped">Recording stopped.</string>
@@ -14,6 +16,8 @@
     <string name="summary_label">Summary</string>
     <string name="transcript_empty">No transcript yet.</string>
     <string name="summary_empty">No summary yet.</string>
-    <string name="mock_transcript">This is a sample transcript captured from your recording.</string>
     <string name="summary_result_format">Summary: %1$s</string>
+    <string name="transcription_no_match">Could not understand speech. Please try again.</string>
+    <string name="transcription_network_error">Speech recognition needs a better network connection.</string>
+    <string name="transcription_generic_error">Transcription failed. Please try again.</string>
 </resources>
