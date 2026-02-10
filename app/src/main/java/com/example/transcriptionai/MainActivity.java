@@ -43,6 +43,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView textSummary;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private static final long RESTART_LISTENING_DELAY_MS = 150L;
     private Runnable summarizeRunnable;
     private SpeechRecognizer speechRecognizer;
     private Intent recognizerIntent;
@@ -241,6 +242,15 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onError(int error) {
+                if (uiState == UiState.RECORDING
+                        && (error == SpeechRecognizer.ERROR_NO_MATCH
+                        || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)) {
+                    setStatus(R.string.listening);
+                    applyUiState();
+                    restartListening();
+                    return;
+                }
+
                 uiState = UiState.IDLE;
                 setStatus(mapRecognizerErrorToStatus(error));
                 applyUiState();
@@ -249,9 +259,17 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onResults(Bundle results) {
                 transcript = getBestResult(results, transcript);
+                renderText();
+
+                if (uiState == UiState.RECORDING) {
+                    setStatus(R.string.listening);
+                    applyUiState();
+                    restartListening();
+                    return;
+                }
+
                 uiState = UiState.IDLE;
                 setStatus(R.string.status_recording_stopped);
-                renderText();
                 applyUiState();
             }
 
@@ -277,6 +295,17 @@ public class MainActivity extends AppCompatActivity {
             return fallbackValue;
         }
         return matches.get(0);
+    }
+
+    private void restartListening() {
+        if (speechRecognizer == null || uiState != UiState.RECORDING) {
+            return;
+        }
+        handler.postDelayed(() -> {
+            if (speechRecognizer != null && uiState == UiState.RECORDING) {
+                speechRecognizer.startListening(recognizerIntent);
+            }
+        }, RESTART_LISTENING_DELAY_MS);
     }
 
     @StringRes
